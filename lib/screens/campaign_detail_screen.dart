@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/payment_service.dart';
 import 'snap_payment_screen.dart';
 import 'package:intl/intl.dart';
+import 'package:timeago/timeago.dart' as timeago;
 
 class CampaignDetailScreen extends StatefulWidget {
   final Map<String, dynamic> campaign;
@@ -15,7 +16,36 @@ class CampaignDetailScreen extends StatefulWidget {
 }
 
 class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
+  List<Map<String, dynamic>> _recentDonors = [];
+  bool _isLoading = true;
   bool _isProcessingPayment = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDonors();
+  }
+
+  Future<void> _fetchDonors() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('donations')
+          .select('user_id, amount, created_at')
+          .eq('campaign_id', widget.campaign['id'])
+          .order('created_at', ascending: false)
+          .limit(10);
+
+      setState(() {
+        _recentDonors = List<Map<String, dynamic>>.from(response);
+        _isLoading = false;
+      });
+    } catch (error) {
+      setState(() {
+        _isLoading = false;
+      });
+      _showErrorSnackBar('Failed to fetch donors: $error');
+    }
+  }
 
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
@@ -133,7 +163,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                 } catch (e) {
                   print('Error updating transaction status: $e');
                 }
-                // _fetchDonors();
+                _fetchDonors();
               },
             ),
           ),
@@ -226,78 +256,136 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
       appBar: AppBar(
         title: Text(campaign['title'] ?? 'Campaign Detail'),
       ),
-      body: SingleChildScrollView(
-        physics: AlwaysScrollableScrollPhysics(),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                campaign['description'] ?? 'No Description',
-                style: TextStyle(fontSize: 16),
-              ),
-              SizedBox(height: 16),
-              Card(
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _fetchDonors,
+              child: SingleChildScrollView(
+                physics: AlwaysScrollableScrollPhysics(),
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      LinearProgressIndicator(
-                        value: double.parse(collectedAmount) /
-                            double.parse(goalAmount),
-                        minHeight: 10,
-                        color: Colors.green,
-                        backgroundColor: Colors.grey[300],
+                      Text(
+                        campaign['description'] ?? 'No Description',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      SizedBox(height: 16),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            children: [
+                              LinearProgressIndicator(
+                                value: double.parse(collectedAmount) /
+                                    double.parse(goalAmount),
+                                minHeight: 10,
+                                color: Colors.green,
+                                backgroundColor: Colors.grey[300],
+                              ),
+                              SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Terkumpul: Rp ${NumberFormat('#,###').format(int.parse(collectedAmount))}',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    'Target: Rp ${NumberFormat('#,###').format(int.parse(goalAmount))}',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isProcessingPayment
+                              ? null
+                              : () => _showDonateDialog(context),
+                          style: ElevatedButton.styleFrom(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            backgroundColor: Colors.green,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: _isProcessingPayment
+                              ? SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text('Donasi sekarang'),
+                        ),
+                      ),
+                      SizedBox(height: 24),
+                      Text(
+                        'Donatur terbaru',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Terkumpul: Rp ${NumberFormat('#,###').format(int.parse(collectedAmount))}',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            'Target: Rp ${NumberFormat('#,###').format(int.parse(goalAmount))}',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ],
-                      ),
+                      _recentDonors.isEmpty
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Text(
+                                  'Jadilah donatur pertama!',
+                                  style: TextStyle(
+                                      fontSize: 14, color: Colors.grey),
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              physics: NeverScrollableScrollPhysics(),
+                              itemCount: _recentDonors.length,
+                              itemBuilder: (context, index) {
+                                final donor = _recentDonors[index];
+                                return Card(
+                                  elevation: 2,
+                                  margin:
+                                      const EdgeInsets.symmetric(vertical: 8),
+                                  child: ListTile(
+                                    leading: CircleAvatar(
+                                      child: Icon(Icons.person,
+                                          color: Colors.white),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                    title: Text(
+                                        donor['user_email'] ?? 'Hamba Allah'),
+                                    subtitle: Text(
+                                      'Donasi: Rp ${NumberFormat('#,###').format(donor['amount'] ?? 0)}',
+                                      style: TextStyle(color: Colors.black87),
+                                    ),
+                                    trailing: Text(
+                                      timeago.format(
+                                        DateTime.parse(donor['created_at']),
+                                        locale: 'id',
+                                      ),
+                                      style: TextStyle(color: Colors.grey),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                     ],
                   ),
                 ),
               ),
-              SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isProcessingPayment
-                      ? null
-                      : () => _showDonateDialog(context),
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Colors.green,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: _isProcessingPayment
-                      ? SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Text('Donasi sekarang'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 }

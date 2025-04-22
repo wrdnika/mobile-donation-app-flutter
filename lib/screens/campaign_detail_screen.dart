@@ -29,11 +29,12 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
   Future<void> _fetchDonors() async {
     try {
       final response = await Supabase.instance.client
-          .from('donations')
+          .from('transactions')
           .select('user_id, amount, created_at')
           .eq('campaign_id', widget.campaign['id'])
-          .order('created_at', ascending: false)
-          .limit(10);
+          .eq('status', 'success')
+          .order('created_at', ascending: false);
+      // .limit(10);
 
       setState(() {
         _recentDonors = List<Map<String, dynamic>>.from(response);

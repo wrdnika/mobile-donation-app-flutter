@@ -4,6 +4,7 @@ import '../services/payment_service.dart';
 import 'snap_payment_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import '../services/transaction_service.dart';
 
 class CampaignDetailScreen extends StatefulWidget {
   final Map<String, dynamic> campaign;
@@ -435,6 +436,56 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
     );
   }
 
+  bool _isCancelingTransaction = false;
+
+  Future<void> _cancelTransaction(String transactionId) async {
+    setState(() {
+      _isCancelingTransaction = true;
+    });
+
+    try {
+      final success = await TransactionService.cancelTransaction(transactionId);
+
+      if (success) {
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Transaksi berhasil dibatalkan'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Refresh the page or clear the pending transaction
+        setState(() {
+          _pendingTransaction = null;
+        });
+
+        // Optionally reload campaign data if needed
+        // await _loadCampaignData();
+      } else {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal membatalkan transaksi'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isCancelingTransaction = false;
+      });
+    }
+  }
+
   String _getRemainingTime() {
     if (_pendingTransaction == null) return '';
 
@@ -517,8 +568,6 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                         ),
                       ),
                       SizedBox(height: 16),
-
-                      // Pending transaction notification
                       if (_pendingTransaction != null)
                         Card(
                           color: Colors.amber.shade50,
@@ -558,37 +607,68 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                                   ),
                                 ),
                                 SizedBox(height: 12),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton(
-                                    onPressed: _isProcessingPayment
-                                        ? null
-                                        : _continuePendingPayment,
-                                    style: ElevatedButton.styleFrom(
-                                      padding:
-                                          EdgeInsets.symmetric(vertical: 12),
-                                      backgroundColor: Colors.amber,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        onPressed: _isProcessingPayment
+                                            ? null
+                                            : _continuePendingPayment,
+                                        style: ElevatedButton.styleFrom(
+                                          padding: EdgeInsets.symmetric(
+                                              vertical: 12),
+                                          backgroundColor: Colors.amber,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                        ),
+                                        child: _isProcessingPayment
+                                            ? SizedBox(
+                                                height: 20,
+                                                width: 20,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: Colors.white,
+                                                ),
+                                              )
+                                            : Text('Lanjutkan Pembayaran'),
                                       ),
                                     ),
-                                    child: _isProcessingPayment
-                                        ? SizedBox(
-                                            height: 20,
-                                            width: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white,
-                                            ),
-                                          )
-                                        : Text('Lanjutkan Pembayaran'),
-                                  ),
+                                    SizedBox(width: 8),
+                                    ElevatedButton(
+                                      onPressed: _isCancelingTransaction
+                                          ? null
+                                          : () => _cancelTransaction(
+                                              _pendingTransaction!['id']),
+                                      style: ElevatedButton.styleFrom(
+                                        padding:
+                                            EdgeInsets.symmetric(vertical: 12),
+                                        backgroundColor: Colors.grey.shade200,
+                                        foregroundColor: Colors.red,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                      child: _isCancelingTransaction
+                                          ? SizedBox(
+                                              height: 20,
+                                              width: 20,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.red,
+                                              ),
+                                            )
+                                          : Text('Batalkan'),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
                           ),
                         ),
-
                       SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,

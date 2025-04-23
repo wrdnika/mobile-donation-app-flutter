@@ -54,6 +54,25 @@ class TransactionService {
     }
   }
 
+  static Future<bool> cancelTransaction(String transactionId) async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return false;
+
+      await Supabase.instance.client
+          .from('transactions')
+          .update({'status': 'failed'})
+          .eq('id', transactionId)
+          .eq('user_id', user.id) // Ensure the transaction belongs to the user
+          .eq('status', 'pending'); // Only cancel if it's still pending
+
+      return true;
+    } catch (e) {
+      print('Error canceling transaction: $e');
+      return false;
+    }
+  }
+
   static Future<void> checkAndUpdateExpiredTransactions() async {
     try {
       final user = Supabase.instance.client.auth.currentUser;

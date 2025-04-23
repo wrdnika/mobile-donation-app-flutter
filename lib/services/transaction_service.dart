@@ -1,8 +1,14 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:async';
 
 class TransactionService {
   static final int paymentExpiryMinutes =
       15; // Transaction expires after 15 minutes
+  static final _transactionsController =
+      StreamController<List<Map<String, dynamic>>>.broadcast();
+  static Stream<List<Map<String, dynamic>>> get transactionsStream =>
+      _transactionsController.stream;
+  static RealtimeChannel? _supabaseChannel;
 
   static Future<List<Map<String, dynamic>>> getTransactionsByUser() async {
     try {
@@ -15,9 +21,12 @@ class TransactionService {
           .from('transactions')
           .select('*, campaigns(title)')
           .eq('user_id', user.id)
-          .order('transaction_time', ascending: false);
+          .not('status', 'in', ['replaced', 'replaced-success']).order(
+              'transaction_time',
+              ascending: false);
 
-      return List<Map<String, dynamic>>.from(response).map((transaction) {
+      final transactions =
+          List<Map<String, dynamic>>.from(response).map((transaction) {
         return {
           'amount': transaction['amount'],
           'transaction_time': transaction['transaction_time'],
@@ -25,9 +34,53 @@ class TransactionService {
           'campaign_title': transaction['campaigns']['title'],
         };
       }).toList();
+
+      // Update the stream with the new data
+      _transactionsController.add(transactions);
+
+      return transactions;
     } catch (e) {
       print('Error fetching transactions: $e');
       return [];
+    }
+  }
+
+  // Subscribe to realtime changes in transactions
+  static StreamSubscription subscribeToTransactions({
+    required Function(List<Map<String, dynamic>>) onData,
+    required Function(dynamic) onError,
+  }) {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        throw Exception('User not logged in');
+      }
+
+      // Remove any existing subscription
+      _supabaseChannel?.unsubscribe();
+
+      // Set up Supabase realtime subscription - use a simpler approach without filter
+      // We'll filter the data when we process it
+      _supabaseChannel = Supabase.instance.client
+          .channel('public:transactions')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'transactions',
+            callback: (payload) {
+              // When a change is detected, fetch the latest transactions
+              // This will automatically filter by user_id in getTransactionsByUser()
+              getTransactionsByUser().then(onData).catchError(onError);
+            },
+          )
+          .subscribe();
+
+      // Also subscribe to our StreamController
+      return transactionsStream.listen(onData, onError: onError);
+    } catch (e) {
+      print('Error setting up realtime subscription: $e');
+      // Return an empty subscription that can be safely canceled
+      return Stream<List<Map<String, dynamic>>>.empty().listen((_) {});
     }
   }
 
@@ -66,6 +119,9 @@ class TransactionService {
           .eq('user_id', user.id) // Ensure the transaction belongs to the user
           .eq('status', 'pending'); // Only cancel if it's still pending
 
+      // Refresh transactions after cancellation
+      getTransactionsByUser();
+
       return true;
     } catch (e) {
       print('Error canceling transaction: $e');
@@ -87,6 +143,7 @@ class TransactionService {
 
       final now = DateTime.now();
       final pendingTransactions = List<Map<String, dynamic>>.from(response);
+      bool updatedAny = false;
 
       // Update each expired transaction individually
       for (var transaction in pendingTransactions) {
@@ -98,7 +155,13 @@ class TransactionService {
           await Supabase.instance.client
               .from('transactions')
               .update({'status': 'failed'}).eq('id', transaction['id']);
+          updatedAny = true;
         }
+      }
+
+      // If any transactions were updated, refresh the transactions list
+      if (updatedAny) {
+        getTransactionsByUser();
       }
     } catch (e) {
       print('Error checking expired transactions: $e');
@@ -137,5 +200,11 @@ class TransactionService {
     } catch (e) {
       return 'Waktu tidak tersedia';
     }
+  }
+
+  // Clean up resources when no longer needed
+  static void dispose() {
+    _supabaseChannel?.unsubscribe();
+    _transactionsController.close();
   }
 }

@@ -5,6 +5,7 @@ import 'snap_payment_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../services/transaction_service.dart';
+import 'dart:async';
 
 class CampaignDetailScreen extends StatefulWidget {
   final Map<String, dynamic> campaign;
@@ -22,12 +23,28 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
   bool _isLoading = true;
   bool _isProcessingPayment = false;
   final int _paymentExpiryMinutes = 15; // Transaction expires after 15 minutes
+  Timer? _refreshTimer; // Timer for auto-refresh
 
   @override
   void initState() {
     super.initState();
     _fetchDonors();
     _checkPendingTransaction();
+
+    // Set up periodic refresh every 10 seconds
+    _refreshTimer = Timer.periodic(Duration(seconds: 10), (timer) {
+      if (mounted) {
+        _checkPendingTransaction();
+        _fetchDonors();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    // Cancel the timer when the widget is disposed
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchDonors() async {
@@ -39,15 +56,19 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
           .eq('status', 'success')
           .order('created_at', ascending: false);
 
-      setState(() {
-        _recentDonors = List<Map<String, dynamic>>.from(response);
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _recentDonors = List<Map<String, dynamic>>.from(response);
+          _isLoading = false;
+        });
+      }
     } catch (error) {
-      setState(() {
-        _isLoading = false;
-      });
-      _showErrorSnackBar('Failed to fetch donors: $error');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        _showErrorSnackBar('Failed to fetch donors: $error');
+      }
     }
   }
 
@@ -66,20 +87,30 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
           .limit(1)
           .maybeSingle();
 
-      if (response != null) {
-        // Check if transaction is expired (15 minutes)
-        final transactionTime = DateTime.parse(response['transaction_time']);
-        final now = DateTime.now();
-        final difference = now.difference(transactionTime);
+      if (mounted) {
+        if (response != null) {
+          // Check if transaction is expired (15 minutes)
+          final transactionTime = DateTime.parse(response['transaction_time']);
+          final now = DateTime.now();
+          final difference = now.difference(transactionTime);
 
-        if (difference.inMinutes > _paymentExpiryMinutes) {
-          // Transaction expired, update status to failed
-          await Supabase.instance.client
-              .from('transactions')
-              .update({'status': 'failed'}).eq('id', response['id']);
+          if (difference.inMinutes > _paymentExpiryMinutes) {
+            // Transaction expired, update status to failed
+            await Supabase.instance.client
+                .from('transactions')
+                .update({'status': 'failed'}).eq('id', response['id']);
+
+            setState(() {
+              _pendingTransaction = null;
+            });
+          } else {
+            setState(() {
+              _pendingTransaction = response;
+            });
+          }
         } else {
           setState(() {
-            _pendingTransaction = response;
+            _pendingTransaction = null;
           });
         }
       }
@@ -460,8 +491,8 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
           _pendingTransaction = null;
         });
 
-        // Optionally reload campaign data if needed
-        // await _loadCampaignData();
+        // Refresh donors data
+        await _fetchDonors();
       } else {
         // Show error message
         ScaffoldMessenger.of(context).showSnackBar(
@@ -506,6 +537,14 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
     return '$minutes menit $seconds detik';
   }
 
+  // Method to manually refresh data
+  Future<void> _refreshData() async {
+    await Future.wait([
+      _fetchDonors(),
+      _checkPendingTransaction(),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final campaign = widget.campaign;
@@ -515,14 +554,18 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(campaign['title'] ?? 'Campaign Detail'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: _refreshData,
+            tooltip: 'Refresh',
+          ),
+        ],
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: () async {
-                await _fetchDonors();
-                await _checkPendingTransaction();
-              },
+              onRefresh: _refreshData,
               child: SingleChildScrollView(
                 physics: AlwaysScrollableScrollPhysics(),
                 child: Padding(

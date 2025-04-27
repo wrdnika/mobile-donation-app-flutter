@@ -22,8 +22,8 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
   Map<String, dynamic>? _pendingTransaction;
   bool _isLoading = true;
   bool _isProcessingPayment = false;
-  final int _paymentExpiryMinutes = 15; // Transaction expires after 15 minutes
-  Timer? _refreshTimer; // Timer for auto-refresh
+  final int _paymentExpiryMinutes = 15;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
@@ -244,8 +244,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
         'amount': intAmount,
         'status': 'pending',
         'transaction_time': DateTime.now().toIso8601String(),
-        'original_transaction_id':
-            originalTransactionId, // Reference to original transaction
+        'original_transaction_id': originalTransactionId,
       });
 
       // Mark the original transaction as 'replaced'

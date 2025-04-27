@@ -2,8 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 
 class TransactionService {
-  static final int paymentExpiryMinutes =
-      15; // Transaction expires after 15 minutes
+  static final int paymentExpiryMinutes = 15;
   static final _transactionsController =
       StreamController<List<Map<String, dynamic>>>.broadcast();
   static Stream<List<Map<String, dynamic>>> get transactionsStream =>
@@ -116,8 +115,8 @@ class TransactionService {
           .from('transactions')
           .update({'status': 'failed'})
           .eq('id', transactionId)
-          .eq('user_id', user.id) // Ensure the transaction belongs to the user
-          .eq('status', 'pending'); // Only cancel if it's still pending
+          .eq('user_id', user.id)
+          .eq('status', 'pending');
 
       // Refresh transactions after cancellation
       getTransactionsByUser();
@@ -177,7 +176,7 @@ class TransactionService {
       return Future.value(difference.inMinutes > paymentExpiryMinutes);
     } catch (e) {
       print('Error checking if transaction expired: $e');
-      return Future.value(true); // Assume expired on error
+      return Future.value(true);
     }
   }
 

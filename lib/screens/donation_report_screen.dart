@@ -46,6 +46,9 @@ class _DonationReportScreenState extends State<DonationReportScreen> {
                 itemBuilder: (context, index) {
                   final report = reports[index];
                   final campaignTitle = report['campaign_title'] ?? 'Unknown';
+                  final collectedAmount =
+                      report['campaign_collected_amount'] ?? 0;
+                  final goalAmount = report['campaign_goal_amount'] ?? 0;
                   final reportDate = DateTime.parse(report['created_at']);
                   final imageUrl = report['report_image'] ?? '';
                   final description =
@@ -77,6 +80,14 @@ class _DonationReportScreenState extends State<DonationReportScreen> {
                                   fontWeight: FontWeight.bold,
                                   fontSize: 18,
                                   color: Colors.green[800],
+                                ),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'Terkumpul dan tersalurkan: Rp${NumberFormat('#,##0', 'id_ID').format(collectedAmount)} dari Target: Rp${NumberFormat('#,##0', 'id_ID').format(goalAmount)}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[700],
                                 ),
                               ),
                               SizedBox(height: 8),

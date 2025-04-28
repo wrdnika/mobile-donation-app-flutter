@@ -28,7 +28,7 @@ class DonationReportService {
         'campaign_collected_amount': report['campaigns']['collected_amount'],
         'campaign_goal_amount': report['campaigns']['goal_amount'],
         'report_description': report['report_description'],
-        'report_image': report['report_image'],
+        'report_image': List<String>.from(report['report_image'] ?? []),
         'created_at': report['created_at'],
       };
     }).toList();

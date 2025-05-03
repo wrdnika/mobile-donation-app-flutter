@@ -6,65 +6,74 @@ class TermsOfServiceScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Terms of Service')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
-                'Terms of Service',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Terakhir diperbarui: 30 Januari 2025',
-                style: TextStyle(fontStyle: FontStyle.italic),
-              ),
-              SizedBox(height: 16),
-              Text(
-                '1. Anda harus memberikan informasi yang benar saat registrasi.',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(
-                'Kami memerlukan data Anda untuk memverifikasi akun dan memastikan keakuratan informasi.',
-              ),
-              SizedBox(height: 10),
-              Text(
-                '2. Data Anda akan kami gunakan hanya untuk keperluan aplikasi.',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(
-                'Kami tidak akan membagikan data Anda ke pihak ketiga tanpa izin.',
-              ),
-              SizedBox(height: 10),
-              Text(
-                '3. Setiap transaksi donasi bersifat final dan tidak dapat dibatalkan.',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(
-                'Mohon periksa kembali sebelum melakukan donasi.',
-              ),
-              SizedBox(height: 10),
-              Text(
-                '4. Anda tidak diperbolehkan menyalahgunakan aplikasi untuk aktivitas ilegal.',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(
-                'Kami berhak menonaktifkan akun yang melanggar aturan.',
-              ),
-              SizedBox(height: 10),
-              Text(
-                '5. Kami berhak mengubah Terms of Service sewaktu-waktu.',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(
-                'Kami akan memberi tahu Anda jika ada perubahan kebijakan.',
-              ),
-            ],
-          ),
+      appBar: AppBar(
+        title: const Text('Ketentuan Layanan'),
+        backgroundColor: Colors.teal,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Ketentuan Layanan',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Terakhir diperbarui: 30 Januari 2025',
+              style: TextStyle(fontStyle: FontStyle.italic),
+            ),
+            const SizedBox(height: 24),
+            _buildSection(
+              title: '1. Informasi Registrasi',
+              body:
+                  'Anda harus memberikan informasi yang benar saat registrasi. Kami memerlukan data Anda untuk memverifikasi akun dan memastikan keakuratan informasi.',
+            ),
+            _buildSection(
+              title: '2. Penggunaan Data',
+              body:
+                  'Data Anda akan kami gunakan hanya untuk keperluan aplikasi. Kami tidak akan membagikan data Anda ke pihak ketiga tanpa izin.',
+            ),
+            _buildSection(
+              title: '3. Kebijakan Donasi',
+              body:
+                  'Setiap transaksi donasi bersifat final dan tidak dapat dibatalkan. Mohon periksa kembali sebelum melakukan donasi.',
+            ),
+            _buildSection(
+              title: '4. Penggunaan Aplikasi',
+              body:
+                  'Anda tidak diperbolehkan menyalahgunakan aplikasi untuk aktivitas ilegal. Kami berhak menonaktifkan akun yang melanggar aturan.',
+            ),
+            _buildSection(
+              title: '5. Perubahan Ketentuan',
+              body:
+                  'Kami berhak mengubah Ketentuan Layanan sewaktu-waktu. Kami akan memberi tahu Anda jika ada perubahan kebijakan.',
+            ),
+            const SizedBox(height: 30),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSection({required String title, required String body}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            body,
+            style: const TextStyle(fontSize: 14),
+            textAlign: TextAlign.justify,
+          ),
+        ],
       ),
     );
   }

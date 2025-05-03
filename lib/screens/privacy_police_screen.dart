@@ -6,61 +6,96 @@ class PrivacyPoliceScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Privacy Police')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
-                'Privacy Police',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 10),
-              Text(
-                'Kami menghargai privasi Anda dan berkomitmen untuk melindungi informasi pribadi Anda. '
-                'Data yang dikumpulkan hanya digunakan untuk keperluan donasi dan tidak akan dibagikan tanpa izin.',
-                style: TextStyle(fontSize: 16),
-              ),
-              SizedBox(height: 20),
-              Text(
-                '1. Data yang Kami Kumpulkan:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(
-                  '- Nama lengkap\n- Email\n- Nomor telepon\n- Riwayat transaksi donasi'),
-              SizedBox(height: 10),
-              Text(
-                '2. Penggunaan Data:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(
-                  'Kami menggunakan data Anda hanya untuk keperluan operasional aplikasi, '
-                  'seperti pencatatan donasi, mengirim notifikasi, dan verifikasi akun.'),
-              SizedBox(height: 10),
-              Text(
-                '3. Keamanan Data:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(
-                  'Kami menjaga keamanan data Anda dengan teknologi enkripsi dan prosedur keamanan ketat.'),
-              SizedBox(height: 10),
-              Text(
-                '4. Hak Pengguna:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(
-                  'Anda dapat meminta penghapusan akun atau perubahan data pribadi dengan menghubungi kami.'),
-              SizedBox(height: 20),
-              Text(
-                'Jika Anda memiliki pertanyaan, silakan hubungi kami di muhamadandikawardana@gmail.com (+6287781235333)',
-                style: TextStyle(fontStyle: FontStyle.italic),
-              ),
-            ],
-          ),
+      appBar: AppBar(
+        title: const Text('Kebijakan Privasi'),
+        backgroundColor: Colors.teal,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 12),
+            Text(
+              'Kami menghargai privasi Anda dan berkomitmen untuk melindungi informasi pribadi Anda. '
+              'Data yang dikumpulkan hanya digunakan untuk keperluan donasi dan tidak akan dibagikan tanpa izin.',
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.justify,
+            ),
+            const SizedBox(height: 24),
+            _buildSectionTitle('1. Data yang Kami Kumpulkan'),
+            _buildBulletList([
+              'Nama lengkap',
+              'Email',
+              'Nomor telepon',
+              'Riwayat transaksi donasi',
+            ]),
+            const SizedBox(height: 16),
+            _buildSectionTitle('2. Penggunaan Data'),
+            _buildSectionBody(
+              'Kami menggunakan data Anda hanya untuk keperluan operasional aplikasi, '
+              'seperti pencatatan donasi, mengirim notifikasi, dan verifikasi akun.',
+            ),
+            const SizedBox(height: 16),
+            _buildSectionTitle('3. Keamanan Data'),
+            _buildSectionBody(
+              'Kami menjaga keamanan data Anda dengan teknologi enkripsi dan prosedur keamanan ketat.',
+            ),
+            const SizedBox(height: 16),
+            _buildSectionTitle('4. Hak Pengguna'),
+            _buildSectionBody(
+              'Anda dapat meminta penghapusan akun atau perubahan data pribadi dengan menghubungi kami.',
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Jika Anda memiliki pertanyaan, silakan hubungi kami di:',
+              style: TextStyle(fontStyle: FontStyle.italic),
+              textAlign: TextAlign.justify,
+            ),
+            const SizedBox(height: 8),
+            SelectableText(
+              '📧 muhamadandikawardana@gmail.com\n📱 +62 877-8123-5333',
+              style: TextStyle(color: Colors.teal.shade700),
+            ),
+            const SizedBox(height: 30),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+    );
+  }
+
+  Widget _buildSectionBody(String content) {
+    return Text(
+      content,
+      style: const TextStyle(fontSize: 14),
+      textAlign: TextAlign.justify,
+    );
+  }
+
+  Widget _buildBulletList(List<String> items) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: items
+          .map((item) => Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('• ', style: TextStyle(fontSize: 14)),
+                    Expanded(
+                        child:
+                            Text(item, style: const TextStyle(fontSize: 14))),
+                  ],
+                ),
+              ))
+          .toList(),
     );
   }
 }

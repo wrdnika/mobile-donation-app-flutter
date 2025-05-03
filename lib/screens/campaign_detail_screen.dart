@@ -22,8 +22,10 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
   Map<String, dynamic>? _pendingTransaction;
   bool _isLoading = true;
   bool _isProcessingPayment = false;
+  bool _isCancelingTransaction = false;
   final int _paymentExpiryMinutes = 15;
   Timer? _refreshTimer;
+  final _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -42,8 +44,8 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
 
   @override
   void dispose() {
-    // Cancel the timer when the widget is disposed
     _refreshTimer?.cancel();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -67,7 +69,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
         setState(() {
           _isLoading = false;
         });
-        _showErrorSnackBar('Failed to fetch donors: $error');
+        _showSnackBar('Gagal memuat data donatur', isError: true);
       }
     }
   }
@@ -119,13 +121,19 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
     }
   }
 
-  void _showErrorSnackBar(String message) {
+  void _showSnackBar(String message, {bool isError = false}) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red,
+        backgroundColor: isError ? Colors.red : Colors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        margin: EdgeInsets.all(10),
+        duration: Duration(seconds: isError ? 4 : 2),
       ),
     );
   }
@@ -140,7 +148,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
 
       return response;
     } catch (e) {
-      _showErrorSnackBar('Failed to fetch user profile');
+      _showSnackBar('Gagal memuat profil pengguna', isError: true);
       return null;
     }
   }
@@ -168,14 +176,14 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
           _pendingTransaction = null;
         });
 
-        _showErrorSnackBar(
-            'Transaksi telah kedaluwarsa. Silakan buat donasi baru.');
+        _showSnackBar('Transaksi telah kedaluwarsa. Silakan buat donasi baru.',
+            isError: true);
         return;
       }
 
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) {
-        _showErrorSnackBar('Please login to donate');
+        _showSnackBar('Harap login untuk berdonasi', isError: true);
         return;
       }
 
@@ -224,9 +232,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
         }
       };
 
-      print("Sending transaction data to Midtrans...");
       final snapUrl = await PaymentService.createTransaction(transactionData);
-      print("Received Snap URL: $snapUrl");
 
       if (snapUrl == null) {
         throw Exception('Failed to get Snap URL');
@@ -282,7 +288,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
       }
     } catch (e) {
       print('Payment Error: $e');
-      _showErrorSnackBar('Payment failed. Please try again.');
+      _showSnackBar('Pembayaran gagal. Silakan coba lagi.', isError: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -304,7 +310,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) {
-        _showErrorSnackBar('Please login to donate');
+        _showSnackBar('Harap login untuk berdonasi', isError: true);
         return;
       }
 
@@ -356,9 +362,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
         }
       };
 
-      print("Sending transaction data to Midtrans...");
       final snapUrl = await PaymentService.createTransaction(transactionData);
-      print("Received Snap URL: $snapUrl");
 
       if (snapUrl == null) {
         throw Exception('Failed to get Snap URL');
@@ -379,6 +383,10 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                   await Supabase.instance.client
                       .from('transactions')
                       .update({'status': 'success'}).eq('order_id', orderId);
+
+                  // Show success message
+                  _showSnackBar(
+                      'Donasi berhasil! Terima kasih atas kebaikan Anda.');
                 } catch (e) {
                   print('Error updating transaction status: $e');
                 }
@@ -391,7 +399,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
       }
     } catch (e) {
       print('Payment Error: $e');
-      _showErrorSnackBar('Payment failed. Please try again.');
+      _showSnackBar('Pembayaran gagal. Silakan coba lagi.', isError: true);
 
       try {
         await Supabase.instance.client
@@ -411,62 +419,155 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
 
   void _showDonateDialog(BuildContext context) {
     final TextEditingController amountController = TextEditingController();
+    // Preset donation amounts
+    final List<int> presetAmounts = [10000, 50000, 100000, 500000];
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Donasi untuk ${widget.campaign['title']}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: amountController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Jumlah (IDR)',
-                border: OutlineInputBorder(),
-                prefixText: 'Rp ',
-              ),
-            ),
-          ],
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          left: 20,
+          right: 20,
+          top: 20,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('Batalkan'),
-          ),
-          ElevatedButton(
-            onPressed: _isProcessingPayment
-                ? null
-                : () async {
-                    final amount = int.tryParse(amountController.text
-                            .replaceAll(RegExp(r'[^0-9]'), '')) ??
-                        0;
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Pilih Jumlah Donasi',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              SizedBox(height: 16),
 
-                    if (amount <= 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Masukkan jumlah yang valid')),
-                      );
-                      return;
-                    }
+              // Preset amount buttons
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: presetAmounts.map((amount) {
+                  return ElevatedButton(
+                    onPressed: () {
+                      amountController.text = amount.toString();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey.shade200,
+                      foregroundColor: Colors.black87,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: Text(
+                      'Rp ${NumberFormat('#,###').format(amount)}',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                  );
+                }).toList(),
+              ),
 
-                    Navigator.of(context).pop();
-                    await _startPayment(amount);
-                  },
-            child: _isProcessingPayment
-                ? SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text('Donasi'),
+              SizedBox(height: 20),
+              Text(
+                'Atau masukkan jumlah lain:',
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              SizedBox(height: 10),
+
+              // Custom amount input
+              TextField(
+                controller: amountController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Jumlah Donasi',
+                  hintText: 'Contoh: 100000',
+                  prefixText: 'Rp ',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.green, width: 2),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                ),
+              ),
+
+              SizedBox(height: 24),
+
+              // Donation button
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: _isProcessingPayment
+                      ? null
+                      : () async {
+                          final amount = int.tryParse(amountController.text
+                                  .replaceAll(RegExp(r'[^0-9]'), '')) ??
+                              0;
+
+                          // if (amount < 10000) {
+                          //   _showSnackBar('Minimal donasi Rp 10.000', isError: true);
+                          //   return;
+                          // }
+
+                          Navigator.of(context).pop();
+                          await _startPayment(amount);
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green.shade100,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: _isProcessingPayment
+                      ? SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          'Donasi Sekarang',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                          ),
+                        ),
+                ),
+              ),
+              SizedBox(height: 20),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
-
-  bool _isCancelingTransaction = false;
 
   Future<void> _cancelTransaction(String transactionId) async {
     setState(() {
@@ -477,13 +578,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
       final success = await TransactionService.cancelTransaction(transactionId);
 
       if (success) {
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Transaksi berhasil dibatalkan'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        _showSnackBar('Transaksi berhasil dibatalkan');
 
         // Refresh the page or clear the pending transaction
         setState(() {
@@ -493,22 +588,10 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
         // Refresh donors data
         await _fetchDonors();
       } else {
-        // Show error message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal membatalkan transaksi'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showSnackBar('Gagal membatalkan transaksi', isError: true);
       }
     } catch (e) {
-      // Show error message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showSnackBar('Error: $e', isError: true);
     } finally {
       setState(() {
         _isCancelingTransaction = false;
@@ -533,7 +616,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
     final minutes = difference.inMinutes;
     final seconds = difference.inSeconds % 60;
 
-    return '$minutes menit $seconds detik';
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
   // Method to manually refresh data
@@ -547,12 +630,22 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final campaign = widget.campaign;
-    final goalAmount = (campaign['goal_amount'] ?? 0).toString();
-    final collectedAmount = (campaign['collected_amount'] ?? 0).toString();
+    final goalAmount = int.parse(campaign['goal_amount']?.toString() ?? '0');
+    final collectedAmount =
+        int.parse(campaign['collected_amount']?.toString() ?? '0');
+    final progressPercentage =
+        goalAmount > 0 ? (collectedAmount / goalAmount) : 0.0;
+    final formatCurrency = NumberFormat('#,###', 'id_ID');
 
     return Scaffold(
+      backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
-        title: Text(campaign['title'] ?? 'Campaign Detail'),
+        title: Text(
+          campaign['title'] ?? 'Campaign Detail',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        elevation: 0,
+        backgroundColor: Colors.white,
         actions: [
           IconButton(
             icon: Icon(Icons.refresh),
@@ -565,235 +658,539 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
           ? Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _refreshData,
-              child: SingleChildScrollView(
-                physics: AlwaysScrollableScrollPhysics(),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        campaign['description'] ?? 'No Description',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                      SizedBox(height: 16),
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
+              child: ListView(
+                controller: _scrollController,
+                padding: EdgeInsets.zero,
+                children: [
+                  // Campaign header with progress
+                  Container(
+                    color: Colors.white,
+                    padding: EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          campaign['description'] ?? 'No Description',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.black87,
+                            height: 1.5,
+                          ),
+                        ),
+                        SizedBox(height: 24),
+
+                        // Progress section
+                        Container(
+                          padding: EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              LinearProgressIndicator(
-                                value: double.parse(collectedAmount) /
-                                    double.parse(goalAmount),
-                                minHeight: 10,
-                                color: Colors.green,
-                                backgroundColor: Colors.grey[300],
+                              Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Terkumpul',
+                                      style: TextStyle(
+                                        color: Colors.grey.shade700,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Target',
+                                      style: TextStyle(
+                                        color: Colors.grey.shade700,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              SizedBox(height: 8),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+                              Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Rp ${formatCurrency.format(collectedAmount)}',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.green.shade700,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Rp ${formatCurrency.format(goalAmount)}',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(height: 12),
+
+                              // Progress bar
+                              Stack(
                                 children: [
-                                  Text(
-                                    'Terkumpul: Rp ${NumberFormat('#,###').format(int.parse(collectedAmount))}',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold),
+                                  Container(
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade200,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
                                   ),
-                                  Text(
-                                    'Target: Rp ${NumberFormat('#,###').format(int.parse(goalAmount))}',
-                                    style: TextStyle(color: Colors.grey),
+                                  Container(
+                                    height: 12,
+                                    width: MediaQuery.of(context).size.width *
+                                        progressPercentage *
+                                        0.85,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Colors.green.shade100,
+                                          Colors.green
+                                        ],
+                                        begin: Alignment.centerLeft,
+                                        end: Alignment.centerRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
                                   ),
                                 ],
+                              ),
+                              SizedBox(height: 12),
+
+                              // Percentage indicator
+                              Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 10),
+                                child: Text(
+                                  '${(progressPercentage * 100).toStringAsFixed(1)}% tercapai',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade700,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
                               ),
                             ],
                           ),
                         ),
+                      ],
+                    ),
+                  ),
+
+                  SizedBox(height: 8),
+
+                  // Pending transaction card
+                  if (_pendingTransaction != null)
+                    Container(
+                      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 10,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
                       ),
-                      SizedBox(height: 16),
-                      if (_pendingTransaction != null)
-                        Card(
-                          color: Colors.amber.shade50,
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
                               children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.pending_actions,
-                                        color: Colors.amber),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Transaksi Tertunda',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Rp ${NumberFormat('#,###').format(_pendingTransaction!['amount'])}',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
+                                Container(
+                                  padding: EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.shade100,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.pending_actions,
+                                    color: Colors.amber.shade800,
+                                    size: 20,
                                   ),
                                 ),
-                                SizedBox(height: 4),
+                                SizedBox(width: 12),
                                 Text(
-                                  'Kedaluwarsa dalam: ${_getRemainingTime()}',
+                                  'Transaksi Tertunda',
                                   style: TextStyle(
-                                    color: Colors.red,
                                     fontWeight: FontWeight.bold,
+                                    fontSize: 16,
                                   ),
-                                ),
-                                SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton(
-                                        onPressed: _isProcessingPayment
-                                            ? null
-                                            : _continuePendingPayment,
-                                        style: ElevatedButton.styleFrom(
-                                          padding: EdgeInsets.symmetric(
-                                              vertical: 12),
-                                          backgroundColor: Colors.amber,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                          ),
-                                        ),
-                                        child: _isProcessingPayment
-                                            ? SizedBox(
-                                                height: 20,
-                                                width: 20,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                  color: Colors.white,
-                                                ),
-                                              )
-                                            : Text('Lanjutkan Pembayaran'),
-                                      ),
-                                    ),
-                                    SizedBox(width: 8),
-                                    ElevatedButton(
-                                      onPressed: _isCancelingTransaction
-                                          ? null
-                                          : () => _cancelTransaction(
-                                              _pendingTransaction!['id']),
-                                      style: ElevatedButton.styleFrom(
-                                        padding:
-                                            EdgeInsets.symmetric(vertical: 12),
-                                        backgroundColor: Colors.grey.shade200,
-                                        foregroundColor: Colors.red,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
-                                      ),
-                                      child: _isCancelingTransaction
-                                          ? SizedBox(
-                                              height: 20,
-                                              width: 20,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: Colors.red,
-                                              ),
-                                            )
-                                          : Text('Batalkan'),
-                                    ),
-                                  ],
                                 ),
                               ],
                             ),
-                          ),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 40),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Rp ${formatCurrency.format(_pendingTransaction!['amount'])}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.timer,
+                                        size: 16,
+                                        color: Colors.red,
+                                      ),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Kedaluwarsa dalam: ${_getRemainingTime()}',
+                                        style: TextStyle(
+                                          color: Colors.red,
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: ElevatedButton(
+                                    onPressed: _isProcessingPayment
+                                        ? null
+                                        : _continuePendingPayment,
+                                    style: ElevatedButton.styleFrom(
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 12),
+                                      backgroundColor: Colors.amber.shade600,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      elevation: 0,
+                                    ),
+                                    child: _isProcessingPayment
+                                        ? SizedBox(
+                                            height: 20,
+                                            width: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : Text(
+                                            'Lanjutkan Pembayaran',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold),
+                                          ),
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  flex: 1,
+                                  child: ElevatedButton(
+                                    onPressed: _isCancelingTransaction
+                                        ? null
+                                        : () => _cancelTransaction(
+                                            _pendingTransaction!['id']),
+                                    style: ElevatedButton.styleFrom(
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 12),
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: Colors.red,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        side: BorderSide(
+                                            color: Colors.red.shade300),
+                                      ),
+                                      elevation: 0,
+                                    ),
+                                    child: _isCancelingTransaction
+                                        ? SizedBox(
+                                            height: 20,
+                                            width: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.red,
+                                            ),
+                                          )
+                                        : Text(
+                                            'Batal',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold),
+                                          ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: (_isProcessingPayment ||
-                                  _pendingTransaction != null)
+                      ),
+                    ),
+
+                  SizedBox(height: 10),
+
+                  // Donate button
+                  Container(
+                    margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: ElevatedButton(
+                      onPressed:
+                          (_isProcessingPayment || _pendingTransaction != null)
                               ? null
                               : () => _showDonateDialog(context),
-                          style: ElevatedButton.styleFrom(
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            backgroundColor: Colors.green,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: _isProcessingPayment
-                              ? SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Text('Donasi sekarang'),
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: Colors.green.shade100,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
                         ),
+                        elevation: 2,
+                        shadowColor: Colors.green.withOpacity(0.3),
                       ),
-                      SizedBox(height: 24),
-                      Text(
-                        'Donatur terbaru',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 8),
-                      _recentDonors.isEmpty
-                          ? Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Text(
-                                  'Jadilah donatur pertama!',
-                                  style: TextStyle(
-                                      fontSize: 14, color: Colors.grey),
-                                ),
+                      child: _isProcessingPayment
+                          ? SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
                               ),
                             )
-                          : ListView.builder(
-                              shrinkWrap: true,
-                              physics: NeverScrollableScrollPhysics(),
-                              itemCount: _recentDonors.length,
-                              itemBuilder: (context, index) {
-                                final donor = _recentDonors[index];
-                                return Card(
-                                  elevation: 2,
-                                  margin:
-                                      const EdgeInsets.symmetric(vertical: 8),
-                                  child: ListTile(
-                                    leading: CircleAvatar(
-                                      child: Icon(Icons.person,
-                                          color: Colors.white),
-                                      backgroundColor: Colors.green,
-                                    ),
-                                    title: Text(
-                                        donor['user_email'] ?? 'Hamba Allah'),
-                                    subtitle: Text(
-                                      'Donasi: Rp ${NumberFormat('#,###').format(donor['amount'] ?? 0)}',
-                                      style: TextStyle(color: Colors.black87),
-                                    ),
-                                    trailing: Text(
-                                      timeago.format(
-                                        DateTime.parse(donor['created_at']),
-                                        locale: 'id',
-                                      ),
-                                      style: TextStyle(color: Colors.grey),
-                                    ),
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.favorite, color: Colors.green),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Donasi Sekarang',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green,
                                   ),
-                                );
-                              },
+                                ),
+                              ],
                             ),
-                    ],
+                    ),
                   ),
-                ),
+
+                  SizedBox(height: 16),
+
+                  // Recent donors section
+                  Container(
+                    color: Colors.white,
+                    padding: EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.people, color: Colors.green.shade600),
+                            SizedBox(width: 8),
+                            Text(
+                              'Donatur Terbaru',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 16),
+                        _recentDonors.isEmpty
+                            ? Center(
+                                child: Column(
+                                  children: [
+                                    Icon(
+                                      Icons.volunteer_activism,
+                                      size: 48,
+                                      color: Colors.grey.shade400,
+                                    ),
+                                    SizedBox(height: 16),
+                                    Text(
+                                      'Jadilah donatur pertama!',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      'Setiap donasi akan sangat berarti',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey.shade500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : ListView.separated(
+                                shrinkWrap: true,
+                                physics: NeverScrollableScrollPhysics(),
+                                itemCount: _recentDonors.length,
+                                separatorBuilder: (context, index) =>
+                                    Divider(height: 1),
+                                itemBuilder: (context, index) {
+                                  final donor = _recentDonors[index];
+                                  final donorTime =
+                                      DateTime.parse(donor['created_at']);
+
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 40,
+                                          height: 40,
+                                          decoration: BoxDecoration(
+                                            color: Colors.green.shade100,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Center(
+                                            child: Icon(
+                                              Icons.person,
+                                              color: Colors.green.shade700,
+                                              size: 20,
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                donor['user_email'] ??
+                                                    'Hamba Allah',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              SizedBox(height: 4),
+                                              Text(
+                                                'Rp ${formatCurrency.format(donor['amount'] ?? 0)}',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.green.shade700,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              timeago.format(donorTime,
+                                                  locale: 'id'),
+                                              style: TextStyle(
+                                                color: Colors.grey.shade600,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                      ],
+                    ),
+                  ),
+
+                  // Information section
+                  Container(
+                    margin: EdgeInsets.all(20),
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blue.shade100),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          color: Colors.blue.shade700,
+                        ),
+                        SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Informasi Donasi',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: Colors.blue.shade800,
+                                ),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'Donasi Anda akan disalurkan secara langsung untuk kampanye ini. Kami tidak memungut biaya admin apapun.',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.blue.shade900,
+                                  height: 1.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  SizedBox(height: 30),
+                ],
               ),
             ),
+
+      // FAB for direct donation
+      floatingActionButton: (_pendingTransaction == null &&
+              !_isProcessingPayment)
+          ? FloatingActionButton.extended(
+              onPressed: () => _showDonateDialog(context),
+              label: Text(
+                'Donasi',
+                style:
+                    TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+              ),
+              icon: Icon(Icons.favorite, color: Colors.green),
+              backgroundColor: Colors.green.shade100,
+              elevation: 4,
+            )
+          : null,
     );
   }
 }

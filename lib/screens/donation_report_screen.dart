@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/donation_report_service.dart';
+import 'pdf_preview_screen.dart';
 
 class DonationReportScreen extends StatefulWidget {
   const DonationReportScreen({Key? key}) : super(key: key);
@@ -380,6 +381,30 @@ class _DonationReportScreenState extends State<DonationReportScreen> {
                           height: 1.5,
                         ),
                       ),
+                      // setelah Text(description)
+                      const SizedBox(height: 16),
+
+                      if (report['report_pdf'] != null)
+                        Row(
+                          children: [
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green.shade600,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8)),
+                              ),
+                              icon: const Icon(Icons.picture_as_pdf, size: 18),
+                              label: const Text('Preview PDF'),
+                              onPressed: () {
+                                Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) => PdfPreviewScreen(
+                                            url: report['report_pdf']!)));
+                              },
+                            ),
+                          ],
+                        ),
                     ],
                   ),
                 ),
